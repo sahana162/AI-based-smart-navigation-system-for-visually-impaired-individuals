@@ -58,7 +58,7 @@ class DetectedVisionItem {
 
   @override
   String toString() =>
-      '$label ($position, $clockPosition, ${(confidence * 100).toStringAsFixed(0)}%, dist: ${estimatedDistanceMeters ?? "N/A"}m${isOverheadHazard ? ", overhead" : ""})';
+      '$label ($position, ${(confidence * 100).toStringAsFixed(0)}%, clock: $clockPosition, dist: ${estimatedDistanceMeters ?? "N/A"}m${isOverheadHazard ? ", overhead" : ""})';
 }
 
 /// Genuine on-device object detection service using a COCO-trained MobileNet SSD model.
@@ -329,6 +329,11 @@ class ObjectDetectorService {
     double imageHeight = 1280.0,
     double confidenceThreshold = 0.45,
   }) async {
+    // Return mock detections if provided (for test environment)
+    if (testMockDetections != null) {
+      return testMockDetections!;
+    }
+
     final file = File(imagePath);
     if (!file.existsSync()) {
       debugPrint('[ObjectDetectorService] Image file not found: $imagePath');

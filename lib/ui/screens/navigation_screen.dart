@@ -83,9 +83,9 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   bool _isLiveMonitoringActive = false;
   bool _isProcessingFrame = false;
+  StreamSubscription<Uint8List>? _uvcStreamSubscription;
+  final Map<String, DateTime> _objectAlertCooldowns = {};
   DateTime? _lastFrameProcessTime;
-  DateTime? _lastAlertAnnouncementTime;
-  String? _lastAnnouncedObstacle;
   bool _isIdentifyingFriend = false;
   DateTime? _lastFriendScanTime;
   final Map<String, DateTime> _friendCooldowns = {};
@@ -366,8 +366,19 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   void _startLiveObstacleMonitoring() {
-    if (_phoneCameraController == null || !_phoneCameraController!.value.isInitialized) return;
     if (_isLiveMonitoringActive) return;
+
+    if (_isUvcActive) {
+      _isLiveMonitoringActive = true;
+      if (mounted) setState(() {});
+      _uvcStreamSubscription?.cancel();
+      _uvcStreamSubscription = _uvcService.onFrameStream.listen(_handleUvcFrame);
+      _uvcService.startStreaming(targetFps: 2);
+      debugPrint('[NavigationScreen] Smart glasses live obstacle streaming started.');
+      return;
+    }
+
+    if (_phoneCameraController == null || !_phoneCameraController!.value.isInitialized) return;
 
     _isLiveMonitoringActive = true;
     if (mounted) setState(() {});
@@ -381,9 +392,13 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 
   Future<void> _stopLiveObstacleMonitoring() async {
-    if (!_isLiveMonitoringActive || _phoneCameraController == null) return;
+    if (!_isLiveMonitoringActive) return;
     _isLiveMonitoringActive = false;
     if (mounted) setState(() {});
+
+    _uvcStreamSubscription?.cancel();
+    _uvcStreamSubscription = null;
+    _uvcService.stopStreaming();
 
     try {
       if (_phoneCameraController?.value.isStreamingImages ?? false) {
@@ -392,6 +407,133 @@ class _NavigationScreenState extends State<NavigationScreen>
       }
     } catch (e) {
       debugPrint('[NavigationScreen] Error stopping image stream: $e');
+    }
+  }
+
+  Future<void> _handleUvcFrame(Uint8List frameBytes) async {
+    if (!_isLiveMonitoringActive || _isProcessingFrame) return;
+
+    final now = DateTime.now();
+    // Throttle UVC inference to at least 450ms
+    if (_lastFrameProcessTime != null && now.difference(_lastFrameProcessTime!).inMilliseconds < 450) {
+      return;
+    }
+
+    _lastFrameProcessTime = now;
+    _isProcessingFrame = true;
+
+    try {
+      final items = await _visionService.detectObjectsFromBytes(frameBytes);
+      if (!mounted || !_isLiveMonitoringActive) return;
+      await _processDetectedObstacles(items, now);
+    } catch (e) {
+      debugPrint('[NavigationScreen] UVC live frame processing error: $e');
+    } finally {
+      _isProcessingFrame = false;
+    }
+  }
+
+  Future<void> _processDetectedObstacles(List<DetectedVisionItem> items, DateTime now) async {
+    final obstacles = items.where((i) => i.isHighConfidence && (i.proximity == 'close' || i.proximity == 'near')).toList();
+
+    if (obstacles.isNotEmpty) {
+      obstacles.sort((a, b) => a.proximity == 'close' ? -1 : 1);
+      final mostUrgent = obstacles.first;
+
+      // Critical path check: If obstacle is directly ahead (< 1.2m) or overhead, bypass cooldown
+      final bool isCriticalForwardHazard = (mostUrgent.position == 'center' && (mostUrgent.estimatedDistanceMeters ?? 99.0) < 1.2) ||
+          mostUrgent.isOverheadHazard;
+
+      // 12-second fatigue suppression window per object class
+      final lastAnnouncedTime = _objectAlertCooldowns[mostUrgent.label];
+      final int elapsedSec = lastAnnouncedTime == null ? 999 : now.difference(lastAnnouncedTime).inSeconds;
+      final bool shouldAnnounce = isCriticalForwardHazard || elapsedSec >= 12;
+
+      if (shouldAnnounce) {
+        _objectAlertCooldowns[mostUrgent.label] = now;
+
+        final bool isKn = widget.ttsService.isKannada;
+        final bool useSonar = widget.storageService.sonarCuesEnabled;
+        final String spokenAlert;
+        final distStr = mostUrgent.estimatedDistanceMeters != null
+            ? '${mostUrgent.estimatedDistanceMeters}m'
+            : '';
+
+        if (isKn) {
+          final labelKn = VisionService.translateLabelToKannada(mostUrgent.label);
+          if (mostUrgent.isOverheadHazard) {
+            spokenAlert = 'ಎಚ್ಚರಿಕೆ! ತಲೆಯ ಮಟ್ಟದಲ್ಲಿ ಅಡೆತಡೆ: $labelKn. ಬಾಗಿ ಅಥವಾ ನಿಲ್ಲಿ.';
+            if (useSonar) SystemSound.play(SystemSoundType.click);
+            HapticFeedback.heavyImpact();
+          } else if (mostUrgent.proximity == 'close' && mostUrgent.position == 'center') {
+            final dText = distStr.isNotEmpty ? 'ಸುಮಾರು ${mostUrgent.estimatedDistanceMeters} ಮೀಟರ್' : 'ಸಮೀಪದಲ್ಲಿದೆ';
+            spokenAlert = 'ಎಚ್ಚರಿಕೆ! $labelKn ನೇರವಾಗಿ ಮುಂದೆ, $dText.';
+            if (useSonar) SystemSound.play(SystemSoundType.click);
+            HapticFeedback.heavyImpact();
+          } else if (mostUrgent.position == 'center') {
+            final dText = distStr.isNotEmpty ? ', ಸುಮಾರು ${mostUrgent.estimatedDistanceMeters} ಮೀಟರ್' : '';
+            spokenAlert = 'ಮುಂದೆ ಅಡೆತಡೆ: $labelKn$dText.';
+            if (useSonar) SystemSound.play(SystemSoundType.click);
+            HapticFeedback.mediumImpact();
+          } else {
+            final posKn = mostUrgent.position == 'left' ? 'ಎಡಕ್ಕೆ' : 'ಬಲಕ್ಕೆ';
+            spokenAlert = '$labelKn ನಿಮ್ಮ $posKn, ${mostUrgent.clockPosition} ದಿಕ್ಕಿನಲ್ಲಿ ಇದೆ.';
+            HapticFeedback.lightImpact();
+          }
+        } else {
+          if (mostUrgent.isOverheadHazard) {
+            spokenAlert = 'Warning! Head-level obstacle ahead: ${mostUrgent.label}, low clearance.';
+            if (useSonar) SystemSound.play(SystemSoundType.click);
+            HapticFeedback.heavyImpact();
+          } else if (mostUrgent.proximity == 'close' && mostUrgent.position == 'center') {
+            final dText = distStr.isNotEmpty ? 'about ${mostUrgent.estimatedDistanceMeters} meters away' : 'close by';
+            spokenAlert = 'Caution! ${mostUrgent.label} directly ahead, $dText.';
+            if (useSonar) SystemSound.play(SystemSoundType.click);
+            HapticFeedback.heavyImpact();
+          } else if (mostUrgent.position == 'center') {
+            final dText = distStr.isNotEmpty ? ' about ${mostUrgent.estimatedDistanceMeters} meters away' : '';
+            spokenAlert = 'Obstacle ahead: ${mostUrgent.label}$dText.';
+            if (useSonar) SystemSound.play(SystemSoundType.click);
+            HapticFeedback.mediumImpact();
+          } else {
+            spokenAlert = '${mostUrgent.label} on your ${mostUrgent.position}, ${mostUrgent.clockPosition}.';
+            HapticFeedback.lightImpact();
+          }
+        }
+
+        setState(() {
+          _statusMessage = spokenAlert;
+        });
+
+        final bool isGeminiLiveActive = widget.storageService.useGeminiLive &&
+            widget.storageService.geminiApiKey.isNotEmpty;
+
+        if (isGeminiLiveActive) {
+          if (useSonar) SystemSound.play(SystemSoundType.click);
+          if (mostUrgent.isOverheadHazard || (mostUrgent.proximity == 'close' && mostUrgent.position == 'center')) {
+            HapticFeedback.heavyImpact();
+          } else if (mostUrgent.position == 'center') {
+            HapticFeedback.mediumImpact();
+          } else {
+            HapticFeedback.lightImpact();
+          }
+        } else {
+          if (useSonar) SystemSound.play(SystemSoundType.click);
+          if (mostUrgent.isOverheadHazard || (mostUrgent.proximity == 'close' && mostUrgent.position == 'center')) {
+            HapticFeedback.heavyImpact();
+          } else if (mostUrgent.position == 'center') {
+            HapticFeedback.mediumImpact();
+          } else {
+            HapticFeedback.lightImpact();
+          }
+          await widget.ttsService.speak(spokenAlert, priority: TtsPriority.hazard);
+        }
+      } else if (mostUrgent.proximity == 'close' || mostUrgent.position == 'center') {
+        if (widget.storageService.sonarCuesEnabled) {
+          SystemSound.play(SystemSoundType.click);
+        }
+        HapticFeedback.selectionClick();
+      }
     }
   }
 
@@ -442,113 +584,7 @@ class _NavigationScreenState extends State<NavigationScreen>
       );
 
       if (!mounted || !_isLiveMonitoringActive) return;
-
-      // Filter for prominent obstacles directly ahead or close by
-      final obstacles = items.where((i) => i.isHighConfidence && (i.proximity == 'close' || i.proximity == 'near')).toList();
-
-      if (obstacles.isNotEmpty) {
-        // Sort with closest first
-        obstacles.sort((a, b) => a.proximity == 'close' ? -1 : 1);
-        final mostUrgent = obstacles.first;
-
-        // Check debouncing: different obstacles announce immediately; same obstacle repeats at most every 3s (close/overhead) or 5s (near)
-        final bool isSameObstacle = _lastAnnouncedObstacle == mostUrgent.label;
-        final int elapsedSec = _lastAlertAnnouncementTime == null
-            ? 999
-            : now.difference(_lastAlertAnnouncementTime!).inSeconds;
-        final int minRepeatIntervalSec = (mostUrgent.proximity == 'close' || mostUrgent.isOverheadHazard) ? 3 : 5;
-        final bool shouldAnnounce = !isSameObstacle || elapsedSec >= minRepeatIntervalSec;
-
-        if (shouldAnnounce) {
-          _lastAnnouncedObstacle = mostUrgent.label;
-          _lastAlertAnnouncementTime = now;
-
-          final bool isKn = widget.ttsService.isKannada;
-          final bool useSonar = widget.storageService.sonarCuesEnabled;
-          final String spokenAlert;
-          final distStr = mostUrgent.estimatedDistanceMeters != null
-              ? '${mostUrgent.estimatedDistanceMeters}m'
-              : '';
-
-          if (isKn) {
-            final labelKn = VisionService.translateLabelToKannada(mostUrgent.label);
-            if (mostUrgent.isOverheadHazard) {
-              spokenAlert = 'ಎಚ್ಚರಿಕೆ! ತಲೆಯ ಮಟ್ಟದಲ್ಲಿ ಅಡೆತಡೆ: $labelKn. ಬಾಗಿ ಅಥವಾ ನಿಲ್ಲಿ.';
-              if (useSonar) SystemSound.play(SystemSoundType.click);
-              HapticFeedback.heavyImpact();
-            } else if (mostUrgent.proximity == 'close' && mostUrgent.position == 'center') {
-              final dText = distStr.isNotEmpty ? 'ಸುಮಾರು ${mostUrgent.estimatedDistanceMeters} ಮೀಟರ್' : 'ಸಮೀಪದಲ್ಲಿದೆ';
-              spokenAlert = 'ಎಚ್ಚರಿಕೆ! $labelKn ನೇರವಾಗಿ ಮುಂದೆ, $dText.';
-              if (useSonar) SystemSound.play(SystemSoundType.click);
-              HapticFeedback.heavyImpact();
-            } else if (mostUrgent.position == 'center') {
-              final dText = distStr.isNotEmpty ? ', ಸುಮಾರು ${mostUrgent.estimatedDistanceMeters} ಮೀಟರ್' : '';
-              spokenAlert = 'ಮುಂದೆ ಅಡೆತಡೆ: $labelKn$dText.';
-              if (useSonar) SystemSound.play(SystemSoundType.click);
-              HapticFeedback.mediumImpact();
-            } else {
-              final posKn = mostUrgent.position == 'left' ? 'ಎಡಕ್ಕೆ' : 'ಬಲಕ್ಕೆ';
-              spokenAlert = '$labelKn ನಿಮ್ಮ $posKn ಇದೆ.';
-              HapticFeedback.lightImpact();
-            }
-          } else {
-            if (mostUrgent.isOverheadHazard) {
-              spokenAlert = 'Warning! Head-level obstacle ahead: ${mostUrgent.label}, low clearance.';
-              if (useSonar) SystemSound.play(SystemSoundType.click);
-              HapticFeedback.heavyImpact();
-            } else if (mostUrgent.proximity == 'close' && mostUrgent.position == 'center') {
-              final dText = distStr.isNotEmpty ? 'about ${mostUrgent.estimatedDistanceMeters} meters away' : 'close by';
-              spokenAlert = 'Caution! ${mostUrgent.label} directly ahead, $dText.';
-              if (useSonar) SystemSound.play(SystemSoundType.click);
-              HapticFeedback.heavyImpact();
-            } else if (mostUrgent.position == 'center') {
-              final dText = distStr.isNotEmpty ? ' about ${mostUrgent.estimatedDistanceMeters} meters away' : '';
-              spokenAlert = 'Obstacle ahead: ${mostUrgent.label}$dText.';
-              if (useSonar) SystemSound.play(SystemSoundType.click);
-              HapticFeedback.mediumImpact();
-            } else {
-              spokenAlert = '${mostUrgent.label} on your ${mostUrgent.position}.';
-              HapticFeedback.lightImpact();
-            }
-          }
-
-          setState(() {
-            _statusMessage = spokenAlert;
-          });
-
-          final bool isGeminiLiveActive = widget.storageService.useGeminiLive &&
-              widget.storageService.geminiApiKey.isNotEmpty;
-
-          if (isGeminiLiveActive) {
-            // When Gemini Live is active, the local obstacle detector acts as a silent
-            // background safety guard with haptic pulses and sonar clicks only.
-            if (useSonar) SystemSound.play(SystemSoundType.click);
-            if (mostUrgent.isOverheadHazard || (mostUrgent.proximity == 'close' && mostUrgent.position == 'center')) {
-              HapticFeedback.heavyImpact();
-            } else if (mostUrgent.position == 'center') {
-              HapticFeedback.mediumImpact();
-            } else {
-              HapticFeedback.lightImpact();
-            }
-          } else {
-            if (useSonar) SystemSound.play(SystemSoundType.click);
-            if (mostUrgent.isOverheadHazard || (mostUrgent.proximity == 'close' && mostUrgent.position == 'center')) {
-              HapticFeedback.heavyImpact();
-            } else if (mostUrgent.position == 'center') {
-              HapticFeedback.mediumImpact();
-            } else {
-              HapticFeedback.lightImpact();
-            }
-            await widget.ttsService.speak(spokenAlert, priority: TtsPriority.hazard);
-          }
-        } else if (mostUrgent.proximity == 'close' || mostUrgent.position == 'center') {
-          // Acoustic Sonar Earcon: Subtle pulse without repetitive verbal chatter
-          if (widget.storageService.sonarCuesEnabled) {
-            SystemSound.play(SystemSoundType.click);
-          }
-          HapticFeedback.selectionClick();
-        }
-      }
+      await _processDetectedObstacles(items, now);
 
       // Friend face recognition & proximity reminder
       final savedFriends = widget.storageService.getSavedFriends();
@@ -1744,6 +1780,8 @@ class _NavigationScreenState extends State<NavigationScreen>
     _isLiveMonitoringActive = false;
 
     // ── Teardown Smart Glasses UVC listeners ────────────────────────────────────
+    _uvcStreamSubscription?.cancel();
+    _uvcStreamSubscription = null;
     _uvcService.removeListener(_onUvcServiceChanged);
     _uvcService.stopStreaming();
     _isGlassesConnected = false;
