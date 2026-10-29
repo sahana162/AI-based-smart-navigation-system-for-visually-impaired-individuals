@@ -6,7 +6,7 @@
 
 | Phase | Name | Status | Plans | Target Date |
 |-------|------|--------|-------|-------------|
-| 1 | UVC Camera & Smart Glasses Stream Reliability | Planned | TBD | Iteration 1 |
+| 1 | UVC Camera & Smart Glasses Stream Reliability | Planned | 2 plans (01-01, 01-02) | Iteration 1 |
 | 2 | Real-Time Vision & Spatial Memory Integration | Planned | TBD | Iteration 2 |
 | 3 | Camera Failover & Offline Resilience Pipeline | Planned | TBD | Iteration 3 |
 | 4 | Interactive Query & Low-Latency Audio Coordination | Planned | TBD | Iteration 4 |
