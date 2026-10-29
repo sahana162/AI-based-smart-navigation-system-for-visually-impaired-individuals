@@ -36,13 +36,16 @@ void main() {
       return true;
     });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('flutter.baseflow.com/permissions/methods'), (MethodCall call) async {
-      if (call.method == 'requestPermissions') {
-        final List<dynamic> permissions = call.arguments as List<dynamic>;
-        return {for (var p in permissions) p: 1};
-      } else if (call.method == 'checkPermissionStatus') {
-        return 1;
+        .setMockMethodCallHandler(const MethodChannel('com.example.blind_navigation/usb_permissions'), (MethodCall call) async {
+      if (call.method == 'requestUsbPermission') {
+        return true;
+      } else if (call.method == 'hasUsbPermission') {
+        return false;
       }
+      return null;
+    });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('flutter_uvc_camera/channel'), (MethodCall call) async {
       return null;
     });
   });
@@ -76,6 +79,25 @@ void main() {
       final frame = await service.captureFrame();
       expect(frame, isNull);
       expect(service.connectionState, UvcConnectionState.disconnected);
+    });
+
+    test('UvcCameraService.requestUsbPermission invokes native USB channel', () async {
+      final service = UvcCameraService();
+      final result = await service.requestUsbPermission();
+      expect(result, isTrue);
+    });
+
+    test('ObjectDetectorService and VisionService drop truncated frames (< 1000 bytes) without crash', () async {
+      final detector = ObjectDetectorService();
+      final vision = VisionService(objectDetectorService: detector);
+
+      // Incomplete packet of 150 bytes
+      final truncatedBuffer = Uint8List(150);
+      final detectorResult = await detector.detectObjectsFromBytes(truncatedBuffer);
+      expect(detectorResult, isEmpty);
+
+      final visionResult = await vision.detectObjectsFromBytes(truncatedBuffer);
+      expect(visionResult, isEmpty);
     });
   });
 

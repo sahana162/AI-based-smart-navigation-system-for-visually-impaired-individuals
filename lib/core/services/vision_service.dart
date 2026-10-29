@@ -237,6 +237,10 @@ class VisionService {
     double imageHeight = 1280.0,
     double confidenceThreshold = 0.40,
   }) async {
+    if (imageBytes.length < 1000) {
+      debugPrint('[VisionService] Dropping truncated or incomplete frame buffer (${imageBytes.length} bytes < 1000 bytes threshold).');
+      return [];
+    }
     try {
       final tfliteItems = await _objectDetectorService.detectObjectsFromBytes(
         imageBytes,

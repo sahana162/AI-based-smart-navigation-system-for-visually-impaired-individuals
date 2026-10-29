@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Realtek / YJX-C5 Smart Glasses (Vendor ID: 3034 / 0x0BDA, Product ID: 1381 / 0x0565) -->
+    <usb-device vendor-id="3034" product-id="1381" />
+    <usb-device vendor-id="3034" />
+
+    <!-- USB Video Class (UVC Class 14) & Miscellaneous Audio/Video (Class 239) -->
+    <usb-device class="239" subclass="2" />
+    <usb-device class="239" />
+    <usb-device class="14" subclass="1" />
+    <usb-device class="14" subclass="2" />
+    <usb-device class="14" />
+
+    <!-- Fallback generic catch-all -->
+    <usb-device />
+</resources>

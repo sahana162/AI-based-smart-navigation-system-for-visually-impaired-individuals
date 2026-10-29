@@ -153,7 +153,10 @@ class ObjectDetectorService {
       return [];
     }
 
-    if (imageBytes.isEmpty) {
+    // Frame Sizing & Crash Guard: Drop incomplete or zero-byte frames (< 1000 bytes)
+    // during hot-plug handshakes to prevent native segmentation faults or image decompression crashes.
+    if (imageBytes.length < 1000) {
+      debugPrint('[ObjectDetectorService] Dropping truncated or incomplete frame buffer (${imageBytes.length} bytes < 1000 bytes threshold).');
       return [];
     }
 

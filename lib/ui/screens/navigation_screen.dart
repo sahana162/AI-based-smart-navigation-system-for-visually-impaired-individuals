@@ -156,13 +156,19 @@ class _NavigationScreenState extends State<NavigationScreen>
         HapticFeedback.heavyImpact();
         widget.ttsService.speak('Glasses disconnected. Switching to phone camera.');
         _switchCameraSource(true);
-      } else if (!wasConnected && currentlyConnected && _usePhoneCamera) {
-        // Reconnected while on phone camera:
+      } else if (!wasConnected && currentlyConnected) {
+        // Reconnected or runtime USB permission granted:
         // Spoken alert + medium vibration + auto-restore glasses
-        debugPrint('[NavigationScreen] Glasses reconnected! Restoring glasses stream.');
+        debugPrint('[NavigationScreen] Glasses connected! Restoring glasses stream.');
         HapticFeedback.mediumImpact();
-        widget.ttsService.speak('Glasses reconnected.');
-        _switchCameraSource(false);
+        widget.ttsService.speak('Glasses connected.');
+        if (_usePhoneCamera) {
+          _switchCameraSource(false);
+        } else {
+          if (widget.storageService.obstacleAlertsDefaultEnabled) {
+            _startLiveObstacleMonitoring();
+          }
+        }
       }
     }
 
@@ -365,6 +371,11 @@ class _NavigationScreenState extends State<NavigationScreen>
         if (widget.storageService.obstacleAlertsDefaultEnabled) {
           _startLiveObstacleMonitoring();
         }
+      } else if (mounted) {
+        setState(() {
+          _isGlassesConnected = _uvcService.isUvcConnected;
+          _statusMessage = _uvcService.statusMessage ?? 'Waiting for Smart Glasses...';
+        });
       }
     } catch (e) {
       debugPrint('[NavigationScreen] UVC initialization error: $e');
