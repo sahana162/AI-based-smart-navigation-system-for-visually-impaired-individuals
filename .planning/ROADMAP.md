@@ -9,7 +9,7 @@
 | 1 | UVC Camera & Smart Glasses Stream Reliability | Completed ✓ | 2 plans (01-01, 01-02) | 2026-10-29 |
 | 2 | Real-Time Vision & Spatial Memory Integration | Completed ✓ | 2 plans (02-01, 02-02) | 2026-10-29 |
 | 3 | Camera Failover & Offline Resilience Pipeline | Completed ✓ | 2 plans (03-01, 03-02) | 2026-10-29 |
-| 4 | Interactive Query & Low-Latency Audio Coordination | Ready to execute | 2 plans (04-01, 04-02) | Iteration 4 |
+| 4 | Interactive Query & Low-Latency Audio Coordination | Completed ✓ | 2 plans (04-01, 04-02) | 2026-10-29 |
 | 5 | End-to-End Verification & Real-World Hardening | Planned | TBD | Iteration 5 |
 
 ---
@@ -43,9 +43,9 @@
 #### Phase 4: Interactive Query & Low-Latency Audio Coordination
 **Goal:** Provide sub-500ms voice query responses ("Where are my keys?", "What is in front of me?") with crisp directional audio cues and prioritized interrupt handling.
 **Requirements:** R2.3, R3.4
-- [ ] Connect `VoiceSessionCoordinator` and `voice_command_parser` directly to real-time spatial memory search.
-- [ ] Optimize TTS speech output pipeline: high-priority safety/obstacle alerts interrupt low-priority descriptions.
-- [ ] Benchmark and optimize end-to-end latency from user voice prompt to audio directional answer.
+- [x] Connect `VoiceSessionCoordinator` and `voice_command_parser` directly to real-time spatial memory search.
+- [x] Optimize TTS speech output pipeline: high-priority safety/obstacle alerts interrupt low-priority descriptions.
+- [x] Benchmark and optimize end-to-end latency from user voice prompt to audio directional answer.
 
 #### Phase 5: End-to-End Verification & Real-World Hardening
 **Goal:** Rigorously verify all edge cases (cable jiggle, backgrounding, network loss, dark environments, noisy background speech) and run user acceptance validation.

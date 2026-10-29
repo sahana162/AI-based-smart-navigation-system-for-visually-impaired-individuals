@@ -18,7 +18,7 @@ Functional, performance, and reliability requirements for stabilizing the wearab
 |----|-------------|-------|--------|
 | R2.1 | **Remembered Item Visual Matching**: Match live object detections (bounding boxes, class labels, spatial positions like left/center/right/distance) against stored `RememberedItem` profiles. | Phase 2 | Complete |
 | R2.2 | **Contextual Scene Integration**: When user asks "Where did I put my keys/glasses/bag?", cross-reference the camera stream and remembered item log to announce real-time location. | Phase 2 | Complete |
-| R2.3 | **Low-Latency Audio Announcement**: Audio feedback delivered under 500ms via TTS with directional cues ("Keys spotted 2 steps ahead, slightly to your left"). | Phase 4 | Planned |
+| R2.3 | **Low-Latency Audio Announcement**: Audio feedback delivered under 500ms via TTS with directional cues ("Keys spotted 2 steps ahead, slightly to your left"). | Phase 4 | Complete |
 | R2.4 | **Audio De-duplication & Suppression**: Prevent repetitive spamming of the same detected object/obstacle within a configurable cooldown window (e.g. 8-15 seconds). | Phase 2 | Complete |
 
 ### 3. Hardware Disconnect & Network Fallback Resilience

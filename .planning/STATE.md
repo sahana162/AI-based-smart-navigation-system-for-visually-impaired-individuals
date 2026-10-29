@@ -1,9 +1,9 @@
 # Project State
 
 ## Current Position
-**Phase:** 4 — Interactive Query & Low-Latency Audio Coordination
-**Status:** Planned (Plans 04-01, 04-02 ready for execution)
-**Last activity:** 2026-10-29 — Phase 4 planned and context locked
+**Phase:** 5 — End-to-End Verification & Real-World Hardening
+**Status:** Ready to discuss / plan
+**Last activity:** 2026-10-29 — Phase 4 executed and verified successfully
 
 ## Completed Phases
 - **Phase 1: UVC Camera & Smart Glasses Stream Reliability** (Plans 01-01, 01-02 complete)
@@ -24,6 +24,12 @@
   - Mid-inference USB disconnect capture protection against PlatformException
   - Automatic live obstacle loop resumption at 2 fps upon smart glasses reconnection
   - Leak-free phone CameraController disposal on hot-plug switch
+- **Phase 4: Interactive Query & Low-Latency Audio Coordination** (Plans 04-01, 04-02 complete)
+  - Zero-latency local fast-path for spatial and obstacle inquiries in < 350ms
+  - Front-loaded concise spatial phrasing ("[Label]: [Clock], [Dist]")
+  - Clock-based directional haptic pulses (left, center, right) and sonar click earcons
+  - Immediate TTS preemption for Tier 0 (emergency) and Tier 1 (hazard) alerts
+  - Microphone muting during hazard alerts with 300ms acoustic grace period to prevent echo feedback
 
 ## Key Decisions
 
