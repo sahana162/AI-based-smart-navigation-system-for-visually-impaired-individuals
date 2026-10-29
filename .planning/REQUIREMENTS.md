@@ -16,18 +16,18 @@ Functional, performance, and reliability requirements for stabilizing the wearab
 ### 2. Real-Time Vision & Spatial Memory Integration
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| R2.1 | **Remembered Item Visual Matching**: Match live object detections (bounding boxes, class labels, spatial positions like left/center/right/distance) against stored `RememberedItem` profiles. | Phase 2 | Planned |
-| R2.2 | **Contextual Scene Integration**: When user asks "Where did I put my keys/glasses/bag?", cross-reference the camera stream and remembered item log to announce real-time location. | Phase 2 | Planned |
-| R2.3 | **Low-Latency Audio Announcement**: Audio feedback delivered under 500ms via TTS with directional cues ("Keys spotted 2 steps ahead, slightly to your left"). | Phase 2 | Planned |
-| R2.4 | **Audio De-duplication & Suppression**: Prevent repetitive spamming of the same detected object/obstacle within a configurable cooldown window (e.g. 8-15 seconds). | Phase 2 | Planned |
+| R2.1 | **Remembered Item Visual Matching**: Match live object detections (bounding boxes, class labels, spatial positions like left/center/right/distance) against stored `RememberedItem` profiles. | Phase 2 | Complete |
+| R2.2 | **Contextual Scene Integration**: When user asks "Where did I put my keys/glasses/bag?", cross-reference the camera stream and remembered item log to announce real-time location. | Phase 2 | Complete |
+| R2.3 | **Low-Latency Audio Announcement**: Audio feedback delivered under 500ms via TTS with directional cues ("Keys spotted 2 steps ahead, slightly to your left"). | Phase 4 | Planned |
+| R2.4 | **Audio De-duplication & Suppression**: Prevent repetitive spamming of the same detected object/obstacle within a configurable cooldown window (e.g. 8-15 seconds). | Phase 2 | Complete |
 
 ### 3. Hardware Disconnect & Network Fallback Resilience
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| R3.1 | **Instant Camera Failover**: If the UVC glasses stream drops or is unplugged during active navigation, immediately fail over to the internal smartphone back camera with an accessible audio cue ("Glasses disconnected. Switching to phone camera."). | Phase 3 | Planned |
-| R3.2 | **Seamless Re-attachment**: If smart glasses are plugged back in, automatically re-initialize UVC stream and switch back without requiring app restart. | Phase 3 | Planned |
-| R3.3 | **Complete On-Device Offline Operation**: When offline (airplane mode or zero data), all hazard detection, TFLite object recognition, smart OCR, and remembered item recall must function locally without network calls or throwing unhandled HTTP errors. | Phase 3 | Planned |
-| R3.4 | **Gemini Live / Cloud Degradation**: Graceful transition between multimodal Gemini Live cloud service and local heuristics/TFLite when network quality fluctuates. | Phase 3 | Planned |
+| R3.1 | **Instant Camera Failover**: If the UVC glasses stream drops or is unplugged during active navigation, immediately fail over to the internal smartphone back camera with an accessible audio cue ("Glasses disconnected. Switching to phone camera."). | Phase 3 | Complete |
+| R3.2 | **Seamless Re-attachment**: If smart glasses are plugged back in, automatically re-initialize UVC stream and switch back without requiring app restart. | Phase 3 | Complete |
+| R3.3 | **Complete On-Device Offline Operation**: When offline (airplane mode or zero data), all hazard detection, TFLite object recognition, smart OCR, and remembered item recall must function locally without network calls or throwing unhandled HTTP errors. | Phase 3 | Complete |
+| R3.4 | **Gemini Live / Cloud Degradation**: Graceful transition between multimodal Gemini Live cloud service and local heuristics/TFLite when network quality fluctuates. | Phase 3 | Complete |
 
 ## V2 — Nice to Have (Future Iterations)
 | ID | Requirement | Priority | Status |

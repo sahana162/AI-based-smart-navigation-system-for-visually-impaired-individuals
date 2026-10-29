@@ -8,7 +8,7 @@
 |-------|------|--------|-------|-------------|
 | 1 | UVC Camera & Smart Glasses Stream Reliability | Completed ✓ | 2 plans (01-01, 01-02) | 2026-10-29 |
 | 2 | Real-Time Vision & Spatial Memory Integration | Completed ✓ | 2 plans (02-01, 02-02) | 2026-10-29 |
-| 3 | Camera Failover & Offline Resilience Pipeline | Ready to execute | 2 plans (03-01, 03-02) | Iteration 3 |
+| 3 | Camera Failover & Offline Resilience Pipeline | Completed ✓ | 2 plans (03-01, 03-02) | 2026-10-29 |
 | 4 | Interactive Query & Low-Latency Audio Coordination | Planned | TBD | Iteration 4 |
 | 5 | End-to-End Verification & Real-World Hardening | Planned | TBD | Iteration 5 |
 
@@ -35,10 +35,10 @@
 #### Phase 3: Camera Failover & Offline Resilience Pipeline
 **Goal:** Guarantee system never fails or goes blind. If smart glasses unplug, seamlessly fall back to phone camera; if network drops, continue full local navigation and object detection.
 **Requirements:** R3.1, R3.2, R3.3, R3.4
-- [ ] Implement automatic hot-swap camera fallback: UVC -> Smartphone back camera with instant spoken notification.
-- [ ] Auto-restore UVC stream when smart glasses are reconnected without screen reload.
-- [ ] Harden offline mode across `VoiceSessionCoordinator`, `GeminiLiveService`, and `VisionService` to gracefully route to local TFLite / ML Kit without exceptions or delays.
-- [ ] Test and enforce zero unhandled crashes on sudden USB disconnect during active inferencing.
+- [x] Implement automatic hot-swap camera fallback: UVC -> Smartphone back camera with instant spoken notification.
+- [x] Auto-restore UVC stream when smart glasses are reconnected without screen reload.
+- [x] Harden offline mode across `VoiceSessionCoordinator`, `GeminiLiveService`, and `VisionService` to gracefully route to local TFLite / ML Kit without exceptions or delays.
+- [x] Test and enforce zero unhandled crashes on sudden USB disconnect during active inferencing.
 
 #### Phase 4: Interactive Query & Low-Latency Audio Coordination
 **Goal:** Provide sub-500ms voice query responses ("Where are my keys?", "What is in front of me?") with crisp directional audio cues and prioritized interrupt handling.
