@@ -136,7 +136,9 @@ class GeminiLiveService extends ChangeNotifier {
   void _setState(GeminiLiveState newState, {String? error}) {
     if (_isDisposed) return;
     _state = newState;
-    _lastError = error;
+    if (error != null) {
+      _lastError = error;
+    }
     notifyListeners();
   }
 

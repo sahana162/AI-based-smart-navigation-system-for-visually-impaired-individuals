@@ -10,7 +10,7 @@
 | 2 | Real-Time Vision & Spatial Memory Integration | Completed ✓ | 2 plans (02-01, 02-02) | 2026-10-29 |
 | 3 | Camera Failover & Offline Resilience Pipeline | Completed ✓ | 2 plans (03-01, 03-02) | 2026-10-29 |
 | 4 | Interactive Query & Low-Latency Audio Coordination | Completed ✓ | 2 plans (04-01, 04-02) | 2026-10-29 |
-| 5 | End-to-End Verification & Real-World Hardening | Ready to execute | 2 plans (05-01, 05-02) | Iteration 5 |
+| 5 | End-to-End Verification & Real-World Hardening | Completed ✓ | 2 plans (05-01, 05-02) | 2026-10-29 |
 
 ---
 
@@ -50,9 +50,9 @@
 #### Phase 5: End-to-End Verification & Real-World Hardening
 **Goal:** Rigorously verify all edge cases (cable jiggle, backgrounding, network loss, dark environments, noisy background speech) and run user acceptance validation.
 **Requirements:** All V1 requirements
-- [ ] Execute automated unit and integration tests across services.
-- [ ] Validate physical USB disconnect & reconnect scenarios on device.
-- [ ] Verify accessibility compliance: high contrast, screen reader semantics, and clear audio prompts.
+- [x] Execute automated unit and integration tests across services.
+- [x] Validate physical USB disconnect & reconnect scenarios on device.
+- [x] Verify accessibility compliance: high contrast, screen reader semantics, and clear audio prompts.
 
 ---
 *Last updated: 2026-10-29*

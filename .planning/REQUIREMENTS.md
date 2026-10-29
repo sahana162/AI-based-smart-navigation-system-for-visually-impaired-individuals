@@ -8,10 +8,10 @@ Functional, performance, and reliability requirements for stabilizing the wearab
 ### 1. UVC Camera & Smart Glasses Stream Reliability
 | ID | Requirement | Phase | Status |
 |----|-------------|-------|--------|
-| R1.1 | **Handshake & Device Discovery**: Robust Android USB permission negotiation with explicit vendor/product filter fallback so glasses are recognized immediately on connect. | Phase 1 | Planned |
-| R1.2 | **Lifecycle Hot-Plug / Unplug Detection**: Handle physical USB cord disconnects, reconnects, app pause/resume without application crashes or frozen frames. | Phase 1 | Planned |
-| R1.3 | **Streaming Frame Pipeline**: Reliable frame extraction at fixed throttle (1-3 fps for continuous analysis, instant for query) without native memory leaks in `flutter_uvc_camera`. | Phase 1 | Planned |
-| R1.4 | **Thermal & Power Throttling**: Adaptive frame processing intervals when idling or when device temperature elevates. | Phase 1 | Planned |
+| R1.1 | **Handshake & Device Discovery**: Robust Android USB permission negotiation with explicit vendor/product filter fallback so glasses are recognized immediately on connect. | Phase 1 | Complete |
+| R1.2 | **Lifecycle Hot-Plug / Unplug Detection**: Handle physical USB cord disconnects, reconnects, app pause/resume without application crashes or frozen frames. | Phase 1 | Complete |
+| R1.3 | **Streaming Frame Pipeline**: Reliable frame extraction at fixed throttle (1-3 fps for continuous analysis, instant for query) without native memory leaks in `flutter_uvc_camera`. | Phase 1 | Complete |
+| R1.4 | **Thermal & Power Throttling**: Adaptive frame processing intervals when idling or when device temperature elevates. | Phase 1 | Complete |
 
 ### 2. Real-Time Vision & Spatial Memory Integration
 | ID | Requirement | Phase | Status |
