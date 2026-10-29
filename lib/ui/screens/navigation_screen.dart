@@ -241,9 +241,11 @@ class _NavigationScreenState extends State<NavigationScreen>
     await widget.storageService.setUsePhoneCamera(toPhone);
 
     if (toPhone) {
+      await _stopLiveObstacleMonitoring();
       _uvcService.stopStreaming();
       await _initPhoneCamera();
     } else {
+      await _stopLiveObstacleMonitoring();
       if (_phoneCameraController != null) {
         try {
           if (_phoneCameraController!.value.isStreamingImages) {
@@ -359,6 +361,10 @@ class _NavigationScreenState extends State<NavigationScreen>
           _isCameraInitialized = true;
           _statusMessage = 'Smart glasses camera active. Forward path monitored.';
         });
+
+        if (widget.storageService.obstacleAlertsDefaultEnabled) {
+          _startLiveObstacleMonitoring();
+        }
       }
     } catch (e) {
       debugPrint('[NavigationScreen] UVC initialization error: $e');
@@ -412,6 +418,7 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   Future<void> _handleUvcFrame(Uint8List frameBytes) async {
     if (!_isLiveMonitoringActive || _isProcessingFrame) return;
+    if (frameBytes.length < 1000) return; // Guard against corrupted or truncated frames
 
     final now = DateTime.now();
     // Throttle UVC inference to at least 450ms

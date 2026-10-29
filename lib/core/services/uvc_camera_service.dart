@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_uvc_camera/flutter_uvc_camera.dart';
 
 /// Connection and streaming state of the USB UVC smart glasses camera.
@@ -170,6 +171,7 @@ class UvcCameraService extends ChangeNotifier {
 
     _isCapturing = true;
     try {
+      if (_controller == null || !isUvcConnected) return null;
       final String? filePath = await _controller!.takePicture();
       if (filePath == null || filePath.isEmpty) return null;
 
@@ -189,8 +191,21 @@ class UvcCameraService extends ChangeNotifier {
         return bytes;
       }
       return null;
+    } on PlatformException catch (e) {
+      debugPrint('[UvcCameraService] PlatformException during capture (device disconnected): $e');
+      _handleCameraClosed();
+      return null;
     } catch (e) {
       debugPrint('[UvcCameraService] Frame capture error: $e');
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('disconnect') ||
+          errorStr.contains('closed') ||
+          errorStr.contains('null') ||
+          errorStr.contains('dead') ||
+          errorStr.contains('jni') ||
+          errorStr.contains('usb')) {
+        _handleCameraClosed();
+      }
       return null;
     } finally {
       _isCapturing = false;
@@ -222,6 +237,7 @@ class UvcCameraService extends ChangeNotifier {
     _statusMessage = 'Smart glasses disconnected.';
     _latestFrameBytes = null;
     _latestFrameTimestamp = null;
+    _controller = null;
     notifyListeners();
   }
 
