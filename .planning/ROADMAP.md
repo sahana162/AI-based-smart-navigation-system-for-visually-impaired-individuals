@@ -7,7 +7,7 @@
 | Phase | Name | Status | Plans | Target Date |
 |-------|------|--------|-------|-------------|
 | 1 | UVC Camera & Smart Glasses Stream Reliability | Completed ✓ | 2 plans (01-01, 01-02) | 2026-10-29 |
-| 2 | Real-Time Vision & Spatial Memory Integration | Planned | 2 plans (02-01, 02-02) | Iteration 2 |
+| 2 | Real-Time Vision & Spatial Memory Integration | Completed ✓ | 2 plans (02-01, 02-02) | 2026-10-29 |
 | 3 | Camera Failover & Offline Resilience Pipeline | Planned | TBD | Iteration 3 |
 | 4 | Interactive Query & Low-Latency Audio Coordination | Planned | TBD | Iteration 4 |
 | 5 | End-to-End Verification & Real-World Hardening | Planned | TBD | Iteration 5 |
@@ -27,10 +27,10 @@
 #### Phase 2: Real-Time Vision & Spatial Memory Integration
 **Goal:** Bridge live object detector outputs with conversational spatial memory (`RememberedItem` & `StorageService`), enabling the app to actively track and locate items in the visual field.
 **Requirements:** R2.1, R2.2, R2.4
-- [ ] Extend `VisionService` and `ObjectDetectorService` to calculate relative spatial positions (horizontal angle, clock position, relative distance) of detected objects.
-- [ ] Integrate live object detection stream with `StorageService.getRememberedItems()` for real-time item cross-referencing.
-- [ ] Implement spatial memory tagging: allow user to capture and store current camera snapshot location when placing an item down.
-- [ ] Add detection de-duplication and cooldown logic to eliminate auditory noise.
+- [x] Extend `VisionService` and `ObjectDetectorService` to calculate relative spatial positions (horizontal angle, clock position, relative distance) of detected objects.
+- [x] Integrate live object detection stream with `StorageService.getRememberedItems()` for real-time item cross-referencing.
+- [x] Implement spatial memory tagging: allow user to capture and store current camera snapshot location when placing an item down.
+- [x] Add detection de-duplication and cooldown logic to eliminate auditory noise.
 
 #### Phase 3: Camera Failover & Offline Resilience Pipeline
 **Goal:** Guarantee system never fails or goes blind. If smart glasses unplug, seamlessly fall back to phone camera; if network drops, continue full local navigation and object detection.
