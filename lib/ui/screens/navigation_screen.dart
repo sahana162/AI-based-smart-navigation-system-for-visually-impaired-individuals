@@ -469,42 +469,50 @@ class _NavigationScreenState extends State<NavigationScreen>
         if (isKn) {
           final labelKn = VisionService.translateLabelToKannada(mostUrgent.label);
           if (mostUrgent.isOverheadHazard) {
-            spokenAlert = 'ಎಚ್ಚರಿಕೆ! ತಲೆಯ ಮಟ್ಟದಲ್ಲಿ ಅಡೆತಡೆ: $labelKn. ಬಾಗಿ ಅಥವಾ ನಿಲ್ಲಿ.';
+            spokenAlert = 'ಎಚ್ಚರಿಕೆ! ತಲೆಯ ಮಟ್ಟದಲ್ಲಿ $labelKn: 12 ಗಂಟೆ, ಬಾಗಿ ಅಥವಾ ನಿಲ್ಲಿ.';
             if (useSonar) SystemSound.play(SystemSoundType.click);
             HapticFeedback.heavyImpact();
           } else if (mostUrgent.proximity == 'close' && mostUrgent.position == 'center') {
             final dText = distStr.isNotEmpty ? 'ಸುಮಾರು ${mostUrgent.estimatedDistanceMeters} ಮೀಟರ್' : 'ಸಮೀಪದಲ್ಲಿದೆ';
-            spokenAlert = 'ಎಚ್ಚರಿಕೆ! $labelKn ನೇರವಾಗಿ ಮುಂದೆ, $dText.';
+            spokenAlert = 'ಎಚ್ಚರಿಕೆ! $labelKn: 12 ಗಂಟೆ, $dText.';
             if (useSonar) SystemSound.play(SystemSoundType.click);
             HapticFeedback.heavyImpact();
           } else if (mostUrgent.position == 'center') {
             final dText = distStr.isNotEmpty ? ', ಸುಮಾರು ${mostUrgent.estimatedDistanceMeters} ಮೀಟರ್' : '';
             spokenAlert = 'ಮುಂದೆ ಅಡೆತಡೆ: $labelKn$dText.';
             if (useSonar) SystemSound.play(SystemSoundType.click);
-            HapticFeedback.mediumImpact();
+            HapticFeedback.heavyImpact();
           } else {
             final posKn = mostUrgent.position == 'left' ? 'ಎಡಕ್ಕೆ' : 'ಬಲಕ್ಕೆ';
-            spokenAlert = '$labelKn ನಿಮ್ಮ $posKn, ${mostUrgent.clockPosition} ದಿಕ್ಕಿನಲ್ಲಿ ಇದೆ.';
-            HapticFeedback.lightImpact();
+            spokenAlert = '$labelKn: ${mostUrgent.clockPosition}, ನಿಮ್ಮ $posKn.';
+            if (mostUrgent.position == 'left') {
+              HapticFeedback.mediumImpact();
+            } else {
+              HapticFeedback.selectionClick();
+            }
           }
         } else {
           if (mostUrgent.isOverheadHazard) {
-            spokenAlert = 'Warning! Head-level obstacle ahead: ${mostUrgent.label}, low clearance.';
+            spokenAlert = 'Warning! Head-level obstacle: ${mostUrgent.label}, 12 o\'clock.';
             if (useSonar) SystemSound.play(SystemSoundType.click);
             HapticFeedback.heavyImpact();
           } else if (mostUrgent.proximity == 'close' && mostUrgent.position == 'center') {
             final dText = distStr.isNotEmpty ? 'about ${mostUrgent.estimatedDistanceMeters} meters away' : 'close by';
-            spokenAlert = 'Caution! ${mostUrgent.label} directly ahead, $dText.';
+            spokenAlert = 'Caution! ${mostUrgent.label}: 12 o\'clock, $dText.';
             if (useSonar) SystemSound.play(SystemSoundType.click);
             HapticFeedback.heavyImpact();
           } else if (mostUrgent.position == 'center') {
             final dText = distStr.isNotEmpty ? ' about ${mostUrgent.estimatedDistanceMeters} meters away' : '';
             spokenAlert = 'Obstacle ahead: ${mostUrgent.label}$dText.';
             if (useSonar) SystemSound.play(SystemSoundType.click);
-            HapticFeedback.mediumImpact();
+            HapticFeedback.heavyImpact();
           } else {
-            spokenAlert = '${mostUrgent.label} on your ${mostUrgent.position}, ${mostUrgent.clockPosition}.';
-            HapticFeedback.lightImpact();
+            spokenAlert = '${mostUrgent.label}: ${mostUrgent.clockPosition}, on your ${mostUrgent.position}.';
+            if (mostUrgent.position == 'left') {
+              HapticFeedback.mediumImpact();
+            } else {
+              HapticFeedback.selectionClick();
+            }
           }
         }
 

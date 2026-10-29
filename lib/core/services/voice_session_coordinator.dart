@@ -83,6 +83,15 @@ class VoiceSessionCoordinator extends ChangeNotifier {
 
     // When TTS finishes, pause briefly to clear audio echo then resume listening or standby.
     ttsService.onSpeechCompleted = _handleSpeechCompleted;
+    ttsService.onSpeechStarting = (priority) async {
+      debugPrint('[Coordinator] TTS starting with priority: $priority');
+      if (priority == TtsPriority.emergency || priority == TtsPriority.hazard) {
+        if (speechService.isListening) {
+          debugPrint('[Coordinator] Hazard alert active: muting microphone to eliminate feedback.');
+          await speechService.stopListening();
+        }
+      }
+    };
     ttsService.addListener(notifyListeners);
     speechService.addListener(notifyListeners);
 
@@ -394,12 +403,12 @@ class VoiceSessionCoordinator extends ChangeNotifier {
   void _handleSpeechCompleted() {
     debugPrint('[Coordinator] TTS completed. awaitingReply: $_awaitingConversationalReply, sessionActive: $_isSessionActive');
 
-    // Cooldown grace period of 600ms ensures speaker audio has cleared the microphone
-    Future.delayed(const Duration(milliseconds: 600), () {
+    // Acoustic grace period (300ms) ensures speaker audio has cleared the microphone
+    Future.delayed(const Duration(milliseconds: 300), () {
       if (ttsService.isSpeaking) return;
       if (_awaitingConversationalReply && !speechService.isListening) {
         startListening(isInteractiveSession: true, awaitingReply: true);
-      } else if (!speechService.isListening) {
+      } else if (!speechService.isListening && _isSessionActive) {
         // Return to wake-word standby automatically after responding
         startWakeWordStandby();
       }
