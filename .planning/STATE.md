@@ -2,8 +2,8 @@
 
 ## Current Position
 **Phase:** 3 — Camera Failover & Offline Resilience Pipeline
-**Status:** Ready to discuss / plan
-**Last activity:** 2026-10-29 — Phase 2 executed and verified successfully
+**Status:** Planned (Plans 03-01, 03-02 ready for execution)
+**Last activity:** 2026-10-29 — Phase 3 planned and context locked
 
 ## Completed Phases
 - **Phase 1: UVC Camera & Smart Glasses Stream Reliability** (Plans 01-01, 01-02 complete)
@@ -30,6 +30,10 @@
 | Instant dual-check item queries | Phase 2 | User | Live camera view check first, then fall back to saved memory |
 | Combined relative + clock spatial directions | Phase 2 | User | Most intuitive bearing format for visually impaired orientation |
 | Proximity-aware 12-second audio cooldown | Phase 2 | User | Prevent speech fatigue while bypassing for critical hazards (<1.2m) |
+| Fast-fail offline degradation (< 50ms) | Phase 3 | User | Eliminate 32s model timeouts and erroneous API key speech when offline |
+| Mid-inference USB disconnect hardening | Phase 3 | User | Protect captureFrame against native PlatformException and JNI crashes |
+| Auto-restore live obstacle loop on re-plug | Phase 3 | User | Seamlessly resume 2 fps UVC stream monitoring without manual user action |
+| Unified RECALL_ITEM dual-check | Phase 3 | User | Live visual scan first, then stored location in both online & offline flows |
 
 ### Blockers / Concerns
 - Need to ensure Android `flutter_uvc_camera` permissions and USB device filters handle hot-plug without native crashes.
