@@ -1,0 +1,59 @@
+# Roadmap: AI-Based Smart Navigation Assistant
+
+## Milestone 1: Core Glasses Vision & Resilient Spatial Memory
+
+### Progress
+
+| Phase | Name | Status | Plans | Target Date |
+|-------|------|--------|-------|-------------|
+| 1 | UVC Camera & Smart Glasses Stream Reliability | Planned | TBD | Iteration 1 |
+| 2 | Real-Time Vision & Spatial Memory Integration | Planned | TBD | Iteration 2 |
+| 3 | Camera Failover & Offline Resilience Pipeline | Planned | TBD | Iteration 3 |
+| 4 | Interactive Query & Low-Latency Audio Coordination | Planned | TBD | Iteration 4 |
+| 5 | End-to-End Verification & Real-World Hardening | Planned | TBD | Iteration 5 |
+
+---
+
+### Phases
+
+#### Phase 1: UVC Camera & Smart Glasses Stream Reliability
+**Goal:** Solidify connection lifecycle, USB permission prompt, hot-plug/unplug event handling, and steady frame capture from external smart glasses without memory leaks or frozen frames.
+**Requirements:** R1.1, R1.2, R1.3, R1.4
+- [ ] Inspect and harden `UvcCameraService` state machine (connecting, streaming, disconnected, error).
+- [ ] Add explicit USB device attached/detached broadcast receiver / listener hooks in Android manifest & service.
+- [ ] Implement leak-free, throttled frame capture buffer for continuous vision feed.
+- [ ] Provide clear audio & state indicators when glasses connect/disconnect.
+
+#### Phase 2: Real-Time Vision & Spatial Memory Integration
+**Goal:** Bridge live object detector outputs with conversational spatial memory (`RememberedItem` & `StorageService`), enabling the app to actively track and locate items in the visual field.
+**Requirements:** R2.1, R2.2, R2.4
+- [ ] Extend `VisionService` and `ObjectDetectorService` to calculate relative spatial positions (horizontal angle, clock position, relative distance) of detected objects.
+- [ ] Integrate live object detection stream with `StorageService.getRememberedItems()` for real-time item cross-referencing.
+- [ ] Implement spatial memory tagging: allow user to capture and store current camera snapshot location when placing an item down.
+- [ ] Add detection de-duplication and cooldown logic to eliminate auditory noise.
+
+#### Phase 3: Camera Failover & Offline Resilience Pipeline
+**Goal:** Guarantee system never fails or goes blind. If smart glasses unplug, seamlessly fall back to phone camera; if network drops, continue full local navigation and object detection.
+**Requirements:** R3.1, R3.2, R3.3, R3.4
+- [ ] Implement automatic hot-swap camera fallback: UVC -> Smartphone back camera with instant spoken notification.
+- [ ] Auto-restore UVC stream when smart glasses are reconnected without screen reload.
+- [ ] Harden offline mode across `VoiceSessionCoordinator`, `GeminiLiveService`, and `VisionService` to gracefully route to local TFLite / ML Kit without exceptions or delays.
+- [ ] Test and enforce zero unhandled crashes on sudden USB disconnect during active inferencing.
+
+#### Phase 4: Interactive Query & Low-Latency Audio Coordination
+**Goal:** Provide sub-500ms voice query responses ("Where are my keys?", "What is in front of me?") with crisp directional audio cues and prioritized interrupt handling.
+**Requirements:** R2.3, R3.4
+- [ ] Connect `VoiceSessionCoordinator` and `voice_command_parser` directly to real-time spatial memory search.
+- [ ] Optimize TTS speech output pipeline: high-priority safety/obstacle alerts interrupt low-priority descriptions.
+- [ ] Benchmark and optimize end-to-end latency from user voice prompt to audio directional answer.
+
+#### Phase 5: End-to-End Verification & Real-World Hardening
+**Goal:** Rigorously verify all edge cases (cable jiggle, backgrounding, network loss, dark environments, noisy background speech) and run user acceptance validation.
+**Requirements:** All V1 requirements
+- [ ] Execute automated unit and integration tests across services.
+- [ ] Validate physical USB disconnect & reconnect scenarios on device.
+- [ ] Verify accessibility compliance: high contrast, screen reader semantics, and clear audio prompts.
+
+---
+*Last updated: 2026-10-29*
+
