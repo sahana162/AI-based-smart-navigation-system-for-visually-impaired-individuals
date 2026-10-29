@@ -176,7 +176,9 @@ class _NavigationScreenState extends State<NavigationScreen>
       _isGlassesConnected = _uvcService.isUvcConnected;
       if (_isGlassesConnected && !_usePhoneCamera) {
         _isCameraInitialized = true;
-        _statusMessage = 'Smart glasses camera active. Forward path monitored.';
+        _statusMessage = _uvcService.statusMessage ?? 'Smart glasses camera active. Forward path monitored.';
+      } else if (!_usePhoneCamera) {
+        _statusMessage = _uvcService.statusMessage ?? _statusMessage;
       }
     });
 
@@ -2084,9 +2086,10 @@ class _NavigationScreenState extends State<NavigationScreen>
                                     ] else ...[
                                       const Icon(Icons.usb, size: 64, color: Colors.amber),
                                       const SizedBox(height: 16),
-                                      const Text(
-                                        "Waiting for Smart Glasses...",
-                                        style: TextStyle(
+                                      Text(
+                                        _uvcService.statusMessage ?? _statusMessage,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 18,
                                           fontWeight: FontWeight.bold,

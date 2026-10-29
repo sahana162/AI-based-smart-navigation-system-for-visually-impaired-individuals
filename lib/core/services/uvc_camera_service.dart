@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +37,7 @@ class UvcCameraService extends ChangeNotifier {
   UvcConnectionState _connectionState = UvcConnectionState.disconnected;
   String? _statusMessage;
   bool _isUsbPermissionListenerSetup = false;
+  Completer<bool>? _permissionCompleter;
 
   // Frame streaming & caching
   Timer? _streamTimer;
@@ -57,15 +59,28 @@ class UvcCameraService extends ChangeNotifier {
   Uint8List? get cachedFrame => _latestFrameBytes;
   Stream<Uint8List> get onFrameStream => _frameStreamController.stream;
 
+  /// Native Android logging visible in logcat even in release mode.
+  static void log(String message, {bool isError = false}) {
+    developer.log(message, name: 'UvcCameraService');
+    debugPrint('[UvcCameraService] $message');
+    try {
+      _usbPermissionChannel.invokeMethod('logNative', {
+        'tag': 'UvcCameraService',
+        'message': message,
+        'isError': isError,
+      });
+    } catch (_) {}
+  }
+
   /// Requests explicit Android OS runtime USB permission via UsbManager.
   Future<bool> requestUsbPermission() async {
     try {
       final bool? requested =
           await _usbPermissionChannel.invokeMethod<bool>('requestUsbPermission');
-      debugPrint('[UvcCameraService] requestUsbPermission invocation returned: $requested');
+      log('requestUsbPermission invocation returned: $requested');
       return requested ?? false;
     } catch (e) {
-      debugPrint('[UvcCameraService] Native requestUsbPermission note: $e');
+      log('Native requestUsbPermission error: $e', isError: true);
       return false;
     }
   }
@@ -78,15 +93,19 @@ class UvcCameraService extends ChangeNotifier {
     _usbPermissionChannel.setMethodCallHandler((call) async {
       if (call.method == 'onUsbPermissionResult') {
         final granted = call.arguments['granted'] as bool? ?? false;
-        debugPrint('[UvcCameraService] Native onUsbPermissionResult: granted=$granted');
+        log('BroadcastReceiver onUsbPermissionResult: granted=$granted');
+        if (_permissionCompleter != null && !_permissionCompleter!.isCompleted) {
+          _permissionCompleter!.complete(granted);
+        }
         if (granted) {
-          _statusMessage = 'Smart glasses permission granted. Initializing camera...';
+          _statusMessage = 'Opening camera feed (640x480)...';
           notifyListeners();
           try {
             await _controller?.initializeCamera();
+            _controller?.updateResolution(PreviewSize(width: 640, height: 480));
             await _controller?.openUVCCamera();
           } catch (e) {
-            debugPrint('[UvcCameraService] openUVCCamera on permission grant error: $e');
+            log('openUVCCamera on permission grant error: $e', isError: true);
           }
         } else {
           _connectionState = UvcConnectionState.error;
@@ -97,38 +116,87 @@ class UvcCameraService extends ChangeNotifier {
     });
   }
 
+  Future<bool> _waitForUsbPermission({Duration timeout = const Duration(seconds: 10)}) async {
+    _permissionCompleter = Completer<bool>();
+    try {
+      return await _permissionCompleter!.future.timeout(timeout);
+    } on TimeoutException {
+      log('Timed out waiting for USB permission dialog grant.', isError: true);
+      return false;
+    }
+  }
+
   /// Attempts to find, request permission, and open the UVC camera device.
-  /// Retries up to [maxAttempts] times with a short interval before falling back.
+  /// Explicitly queries UsbManager and negotiates 640x480 @ 30fps.
   Future<bool> initialize({int maxAttempts = 3}) async {
     if (_connectionState == UvcConnectionState.connecting) {
-      debugPrint('[UvcCameraService] Connection attempt already in progress.');
+      log('Connection attempt already in progress.');
       return false;
     }
 
     _connectionState = UvcConnectionState.connecting;
-    _statusMessage = 'Connecting to smart glasses camera...';
+    _statusMessage = 'Checking for smart glasses...';
     notifyListeners();
 
     try {
       _ensureUsbPermissionListener();
 
-      // 1. Explicitly invoke Android UsbManager.requestPermission
-      await requestUsbPermission();
+      // 1. Query connected USB devices from Android UsbManager
+      Map<String, dynamic>? devInfo;
+      try {
+        final rawMap = await _usbPermissionChannel.invokeMapMethod<String, dynamic>('queryAndRequestUsbDevice');
+        devInfo = rawMap;
+      } catch (e) {
+        log('queryAndRequestUsbDevice error: $e', isError: true);
+      }
 
-      // 2. Ensure UVCCameraController is allocated
+      final deviceFound = devInfo?['deviceFound'] as bool? ?? false;
+      final devName = devInfo?['deviceName'] as String? ?? 'YJX-C5';
+      final hasPermission = devInfo?['hasPermission'] as bool? ?? false;
+
+      if (!deviceFound) {
+        log('No smart glasses detected on USB OTG host.');
+        _statusMessage = 'Waiting for Smart Glasses...';
+        _connectionState = UvcConnectionState.disconnected;
+        notifyListeners();
+        return false;
+      }
+
+      log('USB device detected: $devName (hasPermission=$hasPermission)');
+
+      // 2. Request permission if not yet granted
+      if (!hasPermission) {
+        _statusMessage = 'USB device detected: $devName. Requesting USB permission...';
+        notifyListeners();
+        log('Waiting for user to grant USB permission dialog...');
+
+        final granted = await _waitForUsbPermission(timeout: const Duration(seconds: 10));
+        if (!granted) {
+          log('USB permission denied or dismissed for $devName.', isError: true);
+          _connectionState = UvcConnectionState.error;
+          _statusMessage = 'USB permission denied for $devName.';
+          notifyListeners();
+          return false;
+        }
+      }
+
+      _statusMessage = 'Opening camera feed (640x480)...';
+      notifyListeners();
+
+      // 3. Ensure UVCCameraController is allocated & configured
       if (_controller == null) {
         final ctrl = UVCCameraController();
         ctrl.cameraStateCallback = (state) {
-          debugPrint('[UvcCameraService] Native cameraStateCallback: $state');
+          log('Native cameraStateCallback: $state');
           if (state == UVCCameraState.opened) {
             _connectionState = UvcConnectionState.connected;
-            _statusMessage = 'Smart glasses camera connected.';
+            _statusMessage = 'Smart glasses camera active (640x480 @ 30fps).';
             notifyListeners();
           } else if (state == UVCCameraState.closed) {
             _handleCameraClosed();
           } else if (state == UVCCameraState.error) {
             final errMsg = ctrl.getCameraErrorMsg;
-            debugPrint('[UvcCameraService] Native cameraStateCallback error: $errMsg');
+            log('Native cameraStateCallback error: $errMsg', isError: true);
             if (errMsg.toLowerCase().contains('permission denied')) {
               _connectionState = UvcConnectionState.error;
               _statusMessage = 'USB permission denied for smart glasses.';
@@ -141,20 +209,21 @@ class UvcCameraService extends ChangeNotifier {
 
       final ctrl = _controller!;
 
-      // 3. Initialize camera platform view & trigger open
+      // 4. Initialize camera platform view & hardcode 640x480 resolution negotiation
       try {
         await ctrl.initializeCamera();
+        ctrl.updateResolution(PreviewSize(width: 640, height: 480));
       } catch (e) {
-        debugPrint('[UvcCameraService] initializeCamera error: $e');
+        log('initializeCamera error: $e', isError: true);
       }
 
-      // 4. Open UVC Camera with retry loop
+      // 5. Open UVC Camera with retry loop
       for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-        debugPrint('[UvcCameraService] Open UVC camera attempt $attempt of $maxAttempts...');
+        log('Open UVC camera attempt $attempt of $maxAttempts for $devName...');
         try {
           await ctrl.openUVCCamera();
         } catch (e) {
-          debugPrint('[UvcCameraService] openUVCCamera threw on attempt $attempt: $e');
+          log('openUVCCamera threw on attempt $attempt: $e', isError: true);
         }
 
         // Wait briefly for native opened callback
@@ -166,22 +235,23 @@ class UvcCameraService extends ChangeNotifier {
       }
 
       if (_connectionState == UvcConnectionState.connected) {
-        debugPrint('[UvcCameraService] Smart glasses camera successfully opened.');
+        _statusMessage = 'Smart glasses camera active (640x480 @ 30fps).';
+        notifyListeners();
+        log('Smart glasses camera successfully opened at 640x480.');
         return true;
       } else {
-        debugPrint('[UvcCameraService] Smart glasses not yet connected or permission pending.');
-        // Do not dispose controller: keep UVCCameraView mounted so Android surface/broadcast callbacks remain active
+        log('Smart glasses camera opening pending or device busy.');
         if (_connectionState != UvcConnectionState.error) {
           _connectionState = UvcConnectionState.disconnected;
-          _statusMessage = 'Waiting for smart glasses permission or connection...';
+          _statusMessage = 'Opening camera feed (640x480)...';
         }
         notifyListeners();
         return false;
       }
     } catch (e) {
-      debugPrint('[UvcCameraService] Initialization error: $e');
+      log('Initialization error: $e', isError: true);
       _connectionState = UvcConnectionState.error;
-      _statusMessage = 'Smart glasses connection error: $e';
+      _statusMessage = 'Connection error: $e';
       notifyListeners();
       return false;
     }

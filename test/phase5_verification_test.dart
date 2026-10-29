@@ -37,10 +37,20 @@ void main() {
     });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('com.example.blind_navigation/usb_permissions'), (MethodCall call) async {
-      if (call.method == 'requestUsbPermission') {
+      if (call.method == 'queryAndRequestUsbDevice') {
+        return <String, dynamic>{
+          'deviceFound': true,
+          'hasPermission': true,
+          'deviceName': 'YJX-C5',
+          'vendorId': 3034,
+          'productId': 1381,
+        };
+      } else if (call.method == 'requestUsbPermission') {
         return true;
       } else if (call.method == 'hasUsbPermission') {
-        return false;
+        return true;
+      } else if (call.method == 'logNative') {
+        return null;
       }
       return null;
     });
