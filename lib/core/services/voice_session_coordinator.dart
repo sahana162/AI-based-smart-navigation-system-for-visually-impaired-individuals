@@ -517,6 +517,37 @@ class VoiceSessionCoordinator extends ChangeNotifier {
 
       final reason = geminiLiveService!.lastError ?? 'Model response empty or failed';
       debugPrint('[Coordinator] askGeminiWithVision failed: $reason (reply: $reply)');
+
+      final bool isOffline = reply == '__FALLBACK_LOCAL__' ||
+          reason.toLowerCase().contains('offline') ||
+          reason.toLowerCase().contains('network') ||
+          reason.toLowerCase().contains('socket');
+
+      if (isOffline) {
+        final transitionMsg = strings.isKannada
+            ? 'ಆಫ್‌ಲೈನ್‌ನಲ್ಲಿದೆ, ಸ್ಥಳೀಯ ಕ್ಯಾಮೆರಾ ಪರಿಶೀಲಿಸಲಾಗುತ್ತಿದೆ...'
+            : 'Operating offline. Checking with local vision...';
+        _statusText = transitionMsg;
+        notifyListeners();
+        await ttsService.speak(transitionMsg);
+
+        // Fall back to local vision action if prompt matches any vision intent
+        final lowerPrompt = prompt.toLowerCase();
+        if (lowerPrompt.contains('find') || lowerPrompt.contains('ಹುಡುಕು') || lowerPrompt.contains('looking for')) {
+          final m = RegExp(r"['\x22]([^'\x22]+)['\x22]").firstMatch(prompt);
+          final item = m != null ? m.group(1) : prompt.split(' ').last;
+          if (item != null && item.isNotEmpty) {
+            await executeGlobalCommand(VoiceCommand(
+              type: VoiceCommandType.findItem,
+              argument: item,
+              rawText: prompt,
+            ));
+            return true;
+          }
+        }
+        return false;
+      }
+
       _statusText = 'Gemini Live failed: $reason';
       notifyListeners();
       await ttsService.speak('Gemini Live connection failed, check API key');
@@ -840,11 +871,41 @@ class VoiceSessionCoordinator extends ChangeNotifier {
               final colonIdx = tagContent.indexOf(':');
               final item = colonIdx != -1 ? tagContent.substring(colonIdx + 1).trim() : 'item';
 
+              // 1. Instant Dual-Check: First check live in-memory camera frame with clock direction
+              Uint8List? liveFrame;
+              if (_navDelegate != null) {
+                liveFrame = await _navDelegate!.getLatestFrameJpeg();
+              } else if (UvcCameraService().isUvcConnected) {
+                liveFrame = await UvcCameraService().getLatestFrame();
+              }
+
+              if (liveFrame != null && liveFrame.isNotEmpty) {
+                final liveVisionResult = await VisionService().searchForObjectFromBytes(
+                  liveFrame,
+                  item,
+                  isKannada: strings.isKannada,
+                );
+                if (liveVisionResult != null && liveVisionResult.isNotEmpty) {
+                  final response = strings.isKannada
+                      ? 'ಕಂಡುಬಂದಿದೆ: $liveVisionResult'
+                      : 'I see your $item right now, $liveVisionResult';
+                  _statusText = response;
+                  notifyListeners();
+                  await ttsService.speak(response);
+                  return;
+                }
+              }
+
+              // 2. Memory Fallback: If not visible in current view, fall back to stored RememberedItem
               final remembered = storageService.findRememberedItem(item);
               if (remembered != null) {
-                final response = strings.isKannada
-                    ? 'ನೀವು ನಿಮ್ಮ ${remembered.itemName} ${remembered.locationDescription} ಇದೆ ಎಂದು ಉಳಿಸಿದ್ದೀರಿ. ಅದನ್ನು ಹುಡುಕಲು ನಾನು ಕ್ಯಾಮೆರಾವನ್ನು ತೆರೆಯಬೇಕೇ?'
-                    : 'You saved that your ${remembered.itemName} is ${remembered.locationDescription}. Would you like me to open the camera to look for it?';
+                final response = liveFrame != null
+                    ? (strings.isKannada
+                        ? 'ಪ್ರಸ್ತುತ ವೀಕ್ಷಣೆಯಲ್ಲಿ ಕಂಡುಬಂದಿಲ್ಲ. ನೀವು ಕೊನೆಯದಾಗಿ ಉಳಿಸಿದ್ದು: ನಿಮ್ಮ ${remembered.itemName} ${remembered.locationDescription} ಇದೆ.'
+                        : 'Not visible in your current view. You last remembered that your ${remembered.itemName} is ${remembered.locationDescription}.')
+                    : (strings.isKannada
+                        ? 'ನೀವು ನಿಮ್ಮ ${remembered.itemName} ${remembered.locationDescription} ಇದೆ ಎಂದು ಉಳಿಸಿದ್ದೀರಿ. ಅದನ್ನು ಹುಡುಕಲು ನಾನು ಕ್ಯಾಮೆರಾವನ್ನು ತೆರೆಯಬೇಕೇ?'
+                        : 'You saved that your ${remembered.itemName} is ${remembered.locationDescription}. Would you like me to open the camera to look for it?');
 
                 _statusText = response;
                 notifyListeners();
