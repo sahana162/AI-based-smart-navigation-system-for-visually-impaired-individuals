@@ -408,6 +408,30 @@ class VoiceSessionCoordinator extends ChangeNotifier {
 
   // ── Centralized Command Processing ────────────────────────────────────────
 
+  /// Triggers directional haptic patterns and sonar earcons based on clock-face bearing.
+  static void triggerDirectionalHaptic(String clockPosition) {
+    try {
+      SystemSound.play(SystemSoundType.click);
+    } catch (_) {}
+
+    final lower = clockPosition.toLowerCase();
+    if (lower.contains('10') || lower.contains('11')) {
+      HapticFeedback.mediumImpact();
+    } else if (lower.contains('12')) {
+      HapticFeedback.heavyImpact();
+      Future.delayed(const Duration(milliseconds: 100), () {
+        HapticFeedback.heavyImpact();
+      });
+    } else if (lower.contains('1') || lower.contains('2')) {
+      HapticFeedback.selectionClick();
+      Future.delayed(const Duration(milliseconds: 100), () {
+        HapticFeedback.selectionClick();
+      });
+    } else {
+      HapticFeedback.lightImpact();
+    }
+  }
+
   static const String luxSystemInstruction = GeminiLiveService.defaultSystemInstruction;
 
   /// Asks Gemini Live a vision-based prompt, automatically capturing and attaching the latest camera frame.
@@ -721,6 +745,86 @@ class VoiceSessionCoordinator extends ChangeNotifier {
         notifyListeners();
         await ttsService.speak(farewell);
         return;
+      }
+
+      // 1.5. ZERO-LATENCY FAST-PATH: Real-time visual, obstacle & active camera queries (< 350ms)
+      // When the user asks for immediate obstacle checks or when actively navigating with camera feed,
+      // bypass cellular/cloud roundtrip and resolve directly against the in-memory frame buffer.
+      final bool isObstacleCheck = lowerTrimmed.contains('what is ahead') ||
+          lowerTrimmed.contains("what's ahead") ||
+          lowerTrimmed.contains('what is in front of me') ||
+          lowerTrimmed.contains("what's in front of me") ||
+          lowerTrimmed.contains('what is in front') ||
+          lowerTrimmed.contains('any obstacles') ||
+          lowerTrimmed.contains('obstacle check') ||
+          lowerTrimmed.contains('check obstacles') ||
+          lowerTrimmed.contains('ಮುಂದೆ ಏನಿದೆ') ||
+          lowerTrimmed.contains('ಅಡೆತಡೆ');
+
+      final bool isLiveItemSearch = _navDelegate != null &&
+          (lowerTrimmed.startsWith('where is my ') ||
+           lowerTrimmed.startsWith('where are my ') ||
+           lowerTrimmed.startsWith('find my ') ||
+           lowerTrimmed.startsWith('look for my ') ||
+           (lowerTrimmed.startsWith('ನನ್ನ ') && lowerTrimmed.contains('ಹುಡುಕು')));
+
+      if (isObstacleCheck || isLiveItemSearch) {
+        Uint8List? liveFrame;
+        if (_navDelegate != null) {
+          liveFrame = await _navDelegate!.getLatestFrameJpeg();
+        } else if (UvcCameraService().isUvcConnected) {
+          liveFrame = await UvcCameraService().getLatestFrame();
+        }
+
+        if (liveFrame != null && liveFrame.isNotEmpty) {
+          if (isLiveItemSearch) {
+            String item = lowerTrimmed
+                .replaceAll('where is my ', '')
+                .replaceAll('where are my ', '')
+                .replaceAll('find my ', '')
+                .replaceAll('look for my ', '')
+                .replaceAll('ನನ್ನ ', '')
+                .replaceAll('ಹುಡುಕು', '')
+                .trim();
+            if (item.isNotEmpty) {
+              final visionItems = await VisionService().detectObjectsFromBytes(liveFrame);
+              final matches = visionItems.where((i) =>
+                  i.label.toLowerCase() == item ||
+                  item.contains(i.label.toLowerCase()) ||
+                  i.label.toLowerCase().contains(item)).toList();
+
+              if (matches.isNotEmpty) {
+                final topMatch = matches.first;
+                triggerDirectionalHaptic(topMatch.clockPosition);
+                final alert = topMatch.formatConciseDescription(isKannada: strings.isKannada);
+                _statusText = alert;
+                notifyListeners();
+                await ttsService.speak(alert, priority: TtsPriority.hazard);
+                return;
+              }
+            }
+          } else if (isObstacleCheck) {
+            final visionItems = await VisionService().detectObjectsFromBytes(liveFrame);
+            final obstacles = visionItems.where((i) => i.isHighConfidence && (i.proximity == 'close' || i.proximity == 'near')).toList();
+            if (obstacles.isNotEmpty) {
+              obstacles.sort((a, b) => a.proximity == 'close' ? -1 : 1);
+              final topObstacle = obstacles.first;
+              triggerDirectionalHaptic(topObstacle.clockPosition);
+              final alert = topObstacle.formatConciseDescription(isKannada: strings.isKannada);
+              _statusText = alert;
+              notifyListeners();
+              await ttsService.speak(alert, priority: TtsPriority.hazard);
+              return;
+            } else {
+              final clearMsg = strings.isKannada ? 'ಮುಂದೆ ಯಾವುದೇ ಅಡೆತಡೆಗಳಿಲ್ಲ, ಮಾರ್ಗ ಸ್ಪಷ್ಟವಾಗಿದೆ.' : 'Clear path ahead.';
+              HapticFeedback.lightImpact();
+              _statusText = clearMsg;
+              notifyListeners();
+              await ttsService.speak(clearMsg, priority: TtsPriority.navigation);
+              return;
+            }
+          }
+        }
       }
 
       // 2. PRIMARY AGENTIC ROUTING: Gemini Live Multimodal AI & Action Dispatcher

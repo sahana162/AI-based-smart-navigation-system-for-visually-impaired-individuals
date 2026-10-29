@@ -56,6 +56,23 @@ class DetectedVisionItem {
     }
   }
 
+  /// Formats concise front-loaded phrasing for rapid low-latency guidance.
+  /// e.g. "Backpack: 10 o'clock, 1.5m" / "ಕುರ್ಚಿ: 12 ಗಂಟೆ, 1.5 ಮೀಟರ್"
+  String formatConciseDescription({bool isKannada = false, String? customLabel}) {
+    final displayLabel = customLabel ?? label;
+    final distStr = estimatedDistanceMeters != null ? '${estimatedDistanceMeters}m' : '';
+
+    if (isKannada) {
+      final clockKn = clockPosition
+          .replaceAll(" o'clock", ' ಗಂಟೆ')
+          .replaceAll("o'clock", 'ಗಂಟೆ');
+      final dText = estimatedDistanceMeters != null ? ', ಸುಮಾರು $estimatedDistanceMeters ಮೀಟರ್' : '';
+      return '$displayLabel: $clockKn$dText';
+    } else {
+      return '$displayLabel: $clockPosition${distStr.isNotEmpty ? ', $distStr' : ''}';
+    }
+  }
+
   @override
   String toString() =>
       '$label ($position, ${(confidence * 100).toStringAsFixed(0)}%, clock: $clockPosition, dist: ${estimatedDistanceMeters ?? "N/A"}m${isOverheadHazard ? ", overhead" : ""})';
