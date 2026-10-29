@@ -2,8 +2,8 @@
 
 ## Current Position
 **Phase:** 5 — End-to-End Verification & Real-World Hardening
-**Status:** Ready to discuss / plan
-**Last activity:** 2026-10-29 — Phase 4 executed and verified successfully
+**Status:** Planned (Plans 05-01, 05-02 ready for execution)
+**Last activity:** 2026-10-29 — Phase 5 planned and context locked
 
 ## Completed Phases
 - **Phase 1: UVC Camera & Smart Glasses Stream Reliability** (Plans 01-01, 01-02 complete)
@@ -52,6 +52,8 @@
 | Immediate audio preemption for hazards | Phase 4 | User | Tier 0/1 safety alerts preempt ambient speech and purge lower priority queues |
 | Mic mute window with 300ms acoustic grace period | Phase 4 | User | Eliminate acoustic speaker-to-mic feedback loops during hazard warnings |
 | Front-loaded spatial phrasing & directional haptics | Phase 4 | User | "[Item]: [Clock], [Dist]" format with left/center/right motor patterns |
+| Comprehensive hardware & offline verification suite | Phase 5 | User | Automated test coverage for cord-pull, offline fast-fail & audio preemption |
+| Screen reader semantics & minimum 48x48 targets | Phase 5 | User | Accessibility compliance for visually impaired ergonomics across screens |
 
 ### Blockers / Concerns
 - Need to ensure Android `flutter_uvc_camera` permissions and USB device filters handle hot-plug without native crashes.
