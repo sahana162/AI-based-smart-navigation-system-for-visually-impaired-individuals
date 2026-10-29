@@ -6,7 +6,7 @@
 
 | Phase | Name | Status | Plans | Target Date |
 |-------|------|--------|-------|-------------|
-| 1 | UVC Camera & Smart Glasses Stream Reliability | Planned | 2 plans (01-01, 01-02) | Iteration 1 |
+| 1 | UVC Camera & Smart Glasses Stream Reliability | Completed ✓ | 2 plans (01-01, 01-02) | 2026-10-29 |
 | 2 | Real-Time Vision & Spatial Memory Integration | Planned | TBD | Iteration 2 |
 | 3 | Camera Failover & Offline Resilience Pipeline | Planned | TBD | Iteration 3 |
 | 4 | Interactive Query & Low-Latency Audio Coordination | Planned | TBD | Iteration 4 |
@@ -19,10 +19,10 @@
 #### Phase 1: UVC Camera & Smart Glasses Stream Reliability
 **Goal:** Solidify connection lifecycle, USB permission prompt, hot-plug/unplug event handling, and steady frame capture from external smart glasses without memory leaks or frozen frames.
 **Requirements:** R1.1, R1.2, R1.3, R1.4
-- [ ] Inspect and harden `UvcCameraService` state machine (connecting, streaming, disconnected, error).
-- [ ] Add explicit USB device attached/detached broadcast receiver / listener hooks in Android manifest & service.
-- [ ] Implement leak-free, throttled frame capture buffer for continuous vision feed.
-- [ ] Provide clear audio & state indicators when glasses connect/disconnect.
+- [x] Inspect and harden `UvcCameraService` state machine (connecting, streaming, disconnected, error).
+- [x] Add explicit USB device attached/detached broadcast receiver / listener hooks in Android manifest & service.
+- [x] Implement leak-free, throttled frame capture buffer for continuous vision feed.
+- [x] Provide clear audio & state indicators when glasses connect/disconnect.
 
 #### Phase 2: Real-Time Vision & Spatial Memory Integration
 **Goal:** Bridge live object detector outputs with conversational spatial memory (`RememberedItem` & `StorageService`), enabling the app to actively track and locate items in the visual field.
