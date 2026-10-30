@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Match ALL UVC video devices regardless of Vendor ID -->
+    <usb-device class="239" />
+    <usb-device class="14" />
+    <usb-device class="14" subclass="1" />
+    <usb-device class="14" subclass="2" />
+    <!-- Fallback generic catch-all -->
+    <usb-device />
+</resources>
