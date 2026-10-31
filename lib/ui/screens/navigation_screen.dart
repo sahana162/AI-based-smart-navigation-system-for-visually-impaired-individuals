@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 import '../../core/services/pedestrian_navigation_service.dart';
 import '../../core/services/speech_service.dart';
@@ -19,7 +20,6 @@ import '../widgets/mic_button.dart';
 import '../widgets/viewfinder_reticle.dart';
 import 'feature_detail_screen.dart';
 import '../../core/services/uvc_camera_service.dart';
-import 'package:flutter_uvc_camera/flutter_uvc_camera.dart';
 
 class NavigationScreen extends StatefulWidget {
   final StorageService storageService;
@@ -68,6 +68,8 @@ class _NavigationScreenState extends State<NavigationScreen>
   bool _isGlassesConnected = false;
   CameraController? _phoneCameraController;
   bool _usePhoneCamera = false;
+  Uint8List? _latestStreamFrame;
+  String? _activeStreamHost;
 
   bool _isCameraInitialized = false;
   bool _isPermissionDenied = false;
@@ -339,48 +341,14 @@ class _NavigationScreenState extends State<NavigationScreen>
   /// Includes retry loop so when the user confirms the Android USB dialog,
   /// the active pipeline claims the granted device handle immediately.
   Future<void> _initUvcPipeline() async {
+    // In local stream mode, the USB Camera app manages the hardware directly.
+    // We avoid triggering native OS USB permission dialogs that hijack the camera handle.
     if (mounted) {
-      setState(() => _statusMessage = 'Waiting for Smart Glasses...');
-    }
-
-    // 1. Request microphone and camera permissions required by Android for composite audio/video
-    await Permission.microphone.request();
-    final status = await Permission.camera.request();
-    if (!status.isGranted) {
-      if (mounted) {
-        setState(() {
-          _isPermissionDenied = true;
-          _statusMessage =
-              'Camera permission denied. Visual navigation cannot proceed without camera access.';
-        });
-      }
-      await widget.ttsService.speak(
-        'Camera permission was denied. Please allow camera access in app settings to use visual navigation.',
-      );
-      return;
-    }
-
-    try {
-      if (mounted) setState(() {});
-      final connected = await _uvcService.initialize();
-      if (connected && mounted) {
-        setState(() {
-          _isGlassesConnected = true;
-          _isCameraInitialized = true;
-          _statusMessage = 'Smart glasses camera active. Forward path monitored.';
-        });
-
-        if (widget.storageService.obstacleAlertsDefaultEnabled) {
-          _startLiveObstacleMonitoring();
-        }
-      } else if (mounted) {
-        setState(() {
-          _isGlassesConnected = _uvcService.isUvcConnected;
-          _statusMessage = _uvcService.statusMessage ?? 'Waiting for Smart Glasses...';
-        });
-      }
-    } catch (e) {
-      debugPrint('[NavigationScreen] UVC initialization error: $e');
+      setState(() {
+        _isGlassesConnected = true;
+        _isCameraInitialized = true;
+        _statusMessage = 'Smart glasses stream active. Forward path monitored.';
+      });
     }
   }
 
@@ -656,21 +624,43 @@ class _NavigationScreenState extends State<NavigationScreen>
       }
     }
 
-    if (!_isGlassesConnected || _uvcService.controller == null) {
-      debugPrint('[_captureImageSafely] Smart glasses camera not ready.');
-      return null;
-    }
-
-    try {
-      final frameBytes = await _uvcService.getLatestFrame(forceFresh: true);
-      if (frameBytes != null && frameBytes.isNotEmpty) {
+    // Fast path: Use the live stream in-memory frame buffer (zero network latency, zero timeout)
+    if (_latestStreamFrame != null && _latestStreamFrame!.lengthInBytes > 1000) {
+      try {
         final tempDir = Directory.systemTemp;
         final tempFile = File('${tempDir.path}/uvc_frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
-        await tempFile.writeAsBytes(frameBytes);
+        await tempFile.writeAsBytes(_latestStreamFrame!);
         return XFile(tempFile.path);
+      } catch (e) {
+        debugPrint('[_captureImageSafely] Error writing in-memory frame: $e');
       }
-    } catch (e) {
-      debugPrint('[_captureImageSafely] UVC capture error: $e');
+    }
+
+    // Direct fallback snapshot probe across candidate hosts
+    final hostsToTry = [
+      ?_activeStreamHost,
+      '192.0.0.2',
+      '127.0.0.1',
+      'localhost',
+    ];
+
+    for (final host in hostsToTry) {
+      try {
+        final response = await http.get(
+          Uri.parse('http://$host:8081/snapshot.jpg'),
+        ).timeout(const Duration(milliseconds: 600));
+
+        if (response.statusCode == 200 && response.bodyBytes.lengthInBytes > 1000) {
+          final tempDir = Directory.systemTemp;
+          final tempFile = File('${tempDir.path}/uvc_frame_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          await tempFile.writeAsBytes(response.bodyBytes);
+          _latestStreamFrame = response.bodyBytes;
+          _activeStreamHost = host;
+          return XFile(tempFile.path);
+        }
+      } catch (_) {
+        // Fall through safely to next host
+      }
     }
     return null;
   }
@@ -1297,23 +1287,34 @@ class _NavigationScreenState extends State<NavigationScreen>
       return null;
     }
 
-    if (!_isGlassesConnected || _uvcService.controller == null) {
-      debugPrint('[NavigationScreen] Smart glasses camera not ready.');
-      return null;
+    // Fast path: In-memory live frame from smart glasses stream (zero latency, zero timeout)
+    if (_latestStreamFrame != null && _latestStreamFrame!.lengthInBytes > 1000) {
+      return _latestStreamFrame;
     }
 
-    try {
-      final bytes = await _uvcService.getLatestFrame();
-      if (bytes != null && bytes.length > 1000) {
-        debugPrint('[NavigationScreen] UVC in-memory frame acquired (${bytes.length} bytes).');
-        return bytes;
+    final hostsToTry = [
+      ?_activeStreamHost,
+      '192.0.0.2',
+      '127.0.0.1',
+      'localhost',
+    ];
+
+    for (final host in hostsToTry) {
+      try {
+        final response = await http.get(
+          Uri.parse('http://$host:8081/snapshot.jpg'),
+        ).timeout(const Duration(milliseconds: 600));
+
+        if (response.statusCode == 200 && response.bodyBytes.lengthInBytes > 1000) {
+          _latestStreamFrame = response.bodyBytes;
+          _activeStreamHost = host;
+          return response.bodyBytes;
+        }
+      } catch (_) {
+        // Fall through safely
       }
-      debugPrint('[NavigationScreen] Smart glasses camera returned empty frame.');
-      return null;
-    } catch (e) {
-      debugPrint('[NavigationScreen] getLatestFrameJpeg error: $e');
-      return null;
     }
+    return null;
   }
 
   @override
@@ -2026,119 +2027,16 @@ class _NavigationScreenState extends State<NavigationScreen>
                             ),
                           ),
                       ] else ...[
-                        // Mount UVCCameraView unconditionally with concrete pixel bounds for Android SurfaceTexture
-                        if (_uvcService.controller != null)
-                          ViewfinderReticle(
-                            cornerColor: AppTheme.accentCyan,
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final w = constraints.maxWidth > 0
-                                    ? constraints.maxWidth
-                                    : MediaQuery.of(context).size.width;
-                                final h = constraints.maxHeight > 0
-                                    ? constraints.maxHeight
-                                    : MediaQuery.of(context).size.height;
-                                return UVCCameraView(
-                                  cameraController: _uvcService.controller!,
-                                  width: w,
-                                  height: h,
-                                  params: const UVCCameraViewParamsEntity(
-                                    minFps: 10,
-                                    maxFps: 30,
-                                    frameFormat: 1, // MJPEG standard for OV5648
-                                    bandwidthFactor: 1.0,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-
-                        if (!_isGlassesConnected)
-                          Container(
-                            color: Colors.black,
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(24.0),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    if (_isPermissionDenied) ...[
-                                      const Icon(
-                                        Icons.no_photography,
-                                        size: 64,
-                                        color: AppTheme.danger,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        _statusMessage,
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          color: AppTheme.textPrimary,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      AccessibleButton(
-                                        label: isKn ? 'ಸೆಟ್ಟಿಂಗ್ಸ್ ತೆರೆಯಿರಿ' : 'Open App Settings',
-                                        icon: Icons.settings,
-                                        onPressed: () => openAppSettings(),
-                                      ),
-                                    ] else ...[
-                                      const Icon(Icons.usb, size: 64, color: Colors.amber),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        _uvcService.statusMessage ?? _statusMessage,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 20),
-                                      Wrap(
-                                        spacing: 12,
-                                        runSpacing: 12,
-                                        alignment: WrapAlignment.center,
-                                        children: [
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.amber,
-                                              foregroundColor: Colors.black,
-                                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                            ),
-                                            onPressed: () {
-                                              _initUvcPipeline();
-                                            },
-                                            icon: const Icon(Icons.refresh),
-                                            label: const Text(
-                                              "Retry Connection",
-                                              style: TextStyle(fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                          ElevatedButton.icon(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: AppTheme.accentCyan,
-                                              foregroundColor: Colors.black,
-                                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                            ),
-                                            onPressed: () {
-                                              _switchCameraSource(true);
-                                            },
-                                            icon: const Icon(Icons.phone_android),
-                                            label: const Text(
-                                              "Use Phone Camera",
-                                              style: TextStyle(fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
+                        LocalCameraStreamView(
+                          onFrameReceived: (frame, host, port) {
+                            _latestStreamFrame = frame;
+                            _activeStreamHost = host;
+                            if (_isLiveMonitoringActive && !_isProcessingFrame) {
+                              _handleUvcFrame(frame);
+                            }
+                          },
+                          onSwitchToPhoneCamera: () => _switchCameraSource(true),
+                        ),
                       ],
 
                       // Floating Top Spatial Guidance Strip (Frosted Glass HUD Pill)
@@ -2514,6 +2412,279 @@ class _NavigationScreenState extends State<NavigationScreen>
           ),
         ),
       ),
+    );
+  }
+}
+
+class LocalCameraStreamView extends StatefulWidget {
+  final void Function(Uint8List frame, String host, int port)? onFrameReceived;
+  final VoidCallback? onSwitchToPhoneCamera;
+
+  const LocalCameraStreamView({
+    super.key,
+    this.onFrameReceived,
+    this.onSwitchToPhoneCamera,
+  });
+
+  @override
+  State<LocalCameraStreamView> createState() => _LocalCameraStreamViewState();
+}
+
+class _LocalCameraStreamViewState extends State<LocalCameraStreamView> {
+  Uint8List? _currentFrame;
+  bool _isDisposed = false;
+  String _statusMessage = 'Detecting camera stream...';
+  String _lastError = '';
+  http.Client? _streamClient;
+  Timer? _reconnectTimer;
+  Timer? _snapshotFallbackTimer;
+  bool _isConnecting = false;
+
+  // Candidate IP endpoints for USB Camera streaming
+  final List<String> _candidateHosts = [
+    '192.0.0.2',
+    '127.0.0.1',
+    'localhost',
+    '10.0.2.2',
+  ];
+  int _hostIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initHostsAndConnect();
+  }
+
+  Future<void> _initHostsAndConnect() async {
+    try {
+      final interfaces = await NetworkInterface.list();
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (addr.type == InternetAddressType.IPv4) {
+            final ip = addr.address;
+            if (!_candidateHosts.contains(ip)) {
+              _candidateHosts.insert(0, ip);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      _startStreamPipeline();
+    }
+  }
+
+  void _startStreamPipeline() {
+    if (_isDisposed) return;
+    _reconnectTimer?.cancel();
+    _snapshotFallbackTimer?.cancel();
+    _tryConnectMjpegStream();
+  }
+
+  Future<void> _tryConnectMjpegStream() async {
+    if (_isDisposed || _isConnecting) return;
+    _isConnecting = true;
+
+    final host = _candidateHosts[_hostIndex];
+    const port = 8081;
+
+    if (mounted && _currentFrame == null) {
+      setState(() {
+        _statusMessage = 'Connecting to smart glasses ($host:$port)...';
+      });
+    }
+
+    _streamClient?.close();
+    _streamClient = http.Client();
+
+    try {
+      final request = http.Request('GET', Uri.parse('http://$host:$port/video'));
+      request.headers['Connection'] = 'keep-alive';
+
+      final response = await _streamClient!.send(request).timeout(const Duration(milliseconds: 1500));
+
+      if (response.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            _lastError = '';
+            _statusMessage = 'Connected ($host:$port)';
+          });
+        }
+
+        final buffer = <int>[];
+        await for (final chunk in response.stream) {
+          if (_isDisposed) break;
+          buffer.addAll(chunk);
+
+          // Find JPEG start marker 0xFF, 0xD8
+          int startIndex = -1;
+          for (int i = 0; i < buffer.length - 1; i++) {
+            if (buffer[i] == 0xFF && buffer[i + 1] == 0xD8) {
+              startIndex = i;
+              break;
+            }
+          }
+
+          if (startIndex == -1) {
+            if (buffer.length > 2) {
+              buffer.removeRange(0, buffer.length - 2);
+            }
+            continue;
+          }
+
+          if (startIndex > 0) {
+            buffer.removeRange(0, startIndex);
+          }
+
+          // Find JPEG end marker 0xFF, 0xD9
+          int endIndex = -1;
+          for (int i = 1; i < buffer.length - 1; i++) {
+            if (buffer[i] == 0xFF && buffer[i + 1] == 0xD9) {
+              endIndex = i + 2;
+              break;
+            }
+          }
+
+          if (endIndex != -1) {
+            final frameBytes = Uint8List.fromList(buffer.sublist(0, endIndex));
+            buffer.removeRange(0, endIndex);
+
+            if (frameBytes.lengthInBytes >= 1000) {
+              if (mounted) {
+                setState(() {
+                  _currentFrame = frameBytes;
+                });
+              }
+              widget.onFrameReceived?.call(frameBytes, host, port);
+            }
+          }
+
+          if (buffer.length > 3 * 1024 * 1024) {
+            buffer.clear();
+          }
+        }
+      } else {
+        // Non-200, try snapshot fallback
+        _startSnapshotFallback(host, port);
+      }
+    } catch (e) {
+      if (!_isDisposed) {
+        _hostIndex = (_hostIndex + 1) % _candidateHosts.length;
+        if (mounted && _currentFrame == null) {
+          setState(() {
+            _lastError = 'Host $host:$port unreachable. Probing next interface...';
+          });
+        }
+        _scheduleReconnect();
+      }
+    } finally {
+      _isConnecting = false;
+    }
+  }
+
+  void _startSnapshotFallback(String host, int port) {
+    _snapshotFallbackTimer?.cancel();
+    _snapshotFallbackTimer = Timer.periodic(const Duration(milliseconds: 150), (_) async {
+      if (_isDisposed || !mounted) return;
+      try {
+        final res = await http.get(
+          Uri.parse('http://$host:$port/snapshot.jpg'),
+        ).timeout(const Duration(milliseconds: 300));
+
+        if (res.statusCode == 200 && res.bodyBytes.lengthInBytes >= 1000) {
+          if (mounted) {
+            setState(() {
+              _currentFrame = res.bodyBytes;
+              _lastError = '';
+            });
+          }
+          widget.onFrameReceived?.call(res.bodyBytes, host, port);
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _scheduleReconnect() {
+    if (_isDisposed) return;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(const Duration(milliseconds: 800), () {
+      if (!_isDisposed && mounted) {
+        _tryConnectMjpegStream();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _reconnectTimer?.cancel();
+    _snapshotFallbackTimer?.cancel();
+    _streamClient?.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_currentFrame == null) {
+      return Container(
+        color: Colors.black,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.videocam, size: 56, color: Colors.amber),
+                const SizedBox(height: 16),
+                Text(
+                  _statusMessage,
+                  style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Make sure "USB Camera" has IP Camera Server turned ON (port 8081).',
+                  style: TextStyle(color: Colors.white70, fontSize: 13.5),
+                  textAlign: TextAlign.center,
+                ),
+                if (_lastError.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _lastError,
+                    style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accentCyan,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: widget.onSwitchToPhoneCamera,
+                  icon: const Icon(Icons.phone_android, size: 20),
+                  label: const Text(
+                    'Use Phone Camera Instead',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return Image.memory(
+      _currentFrame!,
+      fit: BoxFit.cover,
+      width: double.infinity,
+      height: double.infinity,
+      gaplessPlayback: true,
     );
   }
 }

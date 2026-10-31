@@ -748,6 +748,7 @@ void main() {
         navigatorKey: navKey,
         geminiLiveService: mockGemini,
       );
+      await storage.setGeminiApiKey('dummy-test-key');
 
       await tester.pumpWidget(
         MaterialApp(
@@ -1721,6 +1722,7 @@ void main() {
         navigatorKey: navKey,
         geminiLiveService: mockGemini,
       );
+      await storage.setGeminiApiKey('dummy-test-key');
 
       // 1. REMEMBER_ITEM action tag
       mockGemini.stubResponse = '[ACTION:REMEMBER_ITEM:wallet:in the blue drawer] I will remember where you kept it.';
